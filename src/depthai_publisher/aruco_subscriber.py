@@ -5,12 +5,16 @@ import cv2
 import rospy
 from sensor_msgs.msg import CompressedImage
 from cv_bridge import CvBridge, CvBridgeError
+from std_msgs.msg import Int32
+from geometry_msgs.msg import Point, PoseStamped
+from spar_msgs.msg import ArucoLocalisation
 
 import numpy as np
+import threading 
 
 
 class ArucoDetector():
-    aruco_dict = cv2.aruco.Dictionary_get(cv2.aruco.DICT_4X4_100)
+    aruco_dict = cv2.aruco.Dictionary_get(cv2.aruco.DICT_5X5_100)
     aruco_params = cv2.aruco.DetectorParameters_create()
 
     frame_sub_topic = '/depthai_node/image/compressed'
@@ -19,19 +23,29 @@ class ArucoDetector():
         self.aruco_pub = rospy.Publisher(
             '/processed_aruco/image/compressed', CompressedImage, queue_size=10)
 
+        self.aruco_pub_inf = rospy.Publisher('/processed_aruco/localisation', ArucoLocalisation, queue_size=10)
         self.br = CvBridge()
+        self.last_msg_time = rospy.Time(0)
+        self.lock = threading.Lock()
 
         if not rospy.is_shutdown():
             self.frame_sub = rospy.Subscriber(
                 self.frame_sub_topic, CompressedImage, self.img_callback)
 
     def img_callback(self, msg_in):
+        with self.lock:
+            if msg_in.header.stamp <= self.last_msg_time:
+                return
+            self.last_msg_time = msg_in.header.stamp
+            
+        # Old bit
         try:
             frame = self.br.compressed_imgmsg_to_cv2(msg_in)
         except CvBridgeError as e:
             rospy.logerr(e)
 
         aruco = self.find_aruco(frame)
+        self.publish_marker(aruco)
         self.publish_to_ros(aruco)
 
         # cv2.imshow('aruco', aruco)
@@ -64,6 +78,30 @@ class ArucoDetector():
                     marker_ID), (top_left[0], top_right[1] - 15), cv2.FONT_HERSHEY_COMPLEX, 0.5, (0, 255, 0), 2)
 
         return frame
+
+    def publish_marker(self, frame):
+        msg_out = ArucoLocalisation()
+        # Check the frame for ArUco markers
+        (corners, ids, _) = cv2.aruco.detectMarkers(
+            frame, self.aruco_dict, parameters=self.aruco_params)
+       
+        
+        # If a marker exists within the frame
+        if len(corners) > 0:
+            ids = ids.flatten()
+
+            for (marker_corner, marker_ID) in zip(corners, ids):
+                corners = marker_corner.reshape((4, 2))
+                (top_left, _, bottom_right, _) = corners
+
+            top_left = (int(top_left[0]), int(top_left[1]))
+            bottom_right = (int(bottom_right[0]), int(bottom_right[1]))
+
+            msg_out.frame_x = (top_left[0] + bottom_right[0]) / 2
+            msg_out.frame_y = (top_left[1] + bottom_right[1]) / 2
+            msg_out.aruco_id = marker_ID
+
+            self.aruco_pub_inf.publish(msg_out)
 
     def publish_to_ros(self, frame):
         msg_out = CompressedImage()
