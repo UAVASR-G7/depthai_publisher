@@ -30,7 +30,7 @@ syncNN = True
 # model path
 modelsPath = "/home/cdrone/catkin_ws/src/depthai_publisher/src/depthai_publisher/models"
 # modelName = 'exp31Yolov5_ov21.4_6sh'
-modelName = 'model2'
+modelName = 'model4'
 # confJson = 'exp31Yolov5.json'
 confJson = 'best.json'
 
@@ -58,7 +58,7 @@ labels = nnMappings.get("labels", {})
 
 class DepthaiCamera():
     # res = [416, 416]
-    fps = 20.0
+    fps = 10.0
 
     pub_topic = '/depthai_node/image/compressed'
     pub_topic_raw = '/depthai_node/image/raw'
@@ -181,7 +181,7 @@ class DepthaiCamera():
                         # print(detection)
                         # print("{},{},{},{},{},{},{}".format(detection.label,labels[detection.label],detection.confidence,detection.xmin, detection.ymin, detection.xmax, detection.ymax))
                         found_classes.append(detection.label)
-                        # print(dai.ImgDetection.getData(detection))
+                        #print(dai.ImgDetection.getData(detection))
                     found_classes = np.unique(found_classes)
                     # print(found_classes)
                     overlay = self.show_yolo(frame, detections)
@@ -285,7 +285,7 @@ class DepthaiCamera():
             cam.setInterleaved(False)
             cam.preview.link(detection_nn.input)
             cam.setColorOrder(dai.ColorCameraProperties.ColorOrder.BGR)
-            cam.setFps(40)
+            cam.setFps(10.0)
             print("Using RGB camera...")
         elif cam_source == 'left':
             cam = pipeline.create(dai.node.MonoCamera)
