@@ -159,7 +159,10 @@ include_directories(
 ## Mark executable scripts (Python etc.) for installation
 ## in contrast to setup.py, you can choose the destination
 catkin_install_python(PROGRAMS
-  scripts/dai_publisher scripts/dai_publisher_yolov5_runner scripts/aruco_subscriber
+  scripts/dai_publisher 
+  scripts/dai_publisher_yolov5_runner1 
+  scripts/dai_publisher_yolov5_runner2
+  scripts/aruco_subscriber
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
