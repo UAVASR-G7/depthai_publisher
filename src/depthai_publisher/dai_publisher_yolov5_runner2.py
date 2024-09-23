@@ -19,6 +19,7 @@ import depthai as dai
 import rospy
 from sensor_msgs.msg import CompressedImage, Image, CameraInfo
 from cv_bridge import CvBridge, CvBridgeError
+from spar_msgs.msg import TargetLocalisation
 
 ############################### ############################### Parameters ###############################
 # Global variables to deal with pipeline creation
@@ -30,7 +31,7 @@ syncNN = True
 # model path
 modelsPath = "/home/cdrone/catkin_ws/src/depthai_publisher/src/depthai_publisher/models"
 # modelName = 'exp31Yolov5_ov21.4_6sh'
-modelName = 'mission2v1'
+modelName = 'mission1v1'
 # confJson = 'exp31Yolov5.json'
 confJson = 'best.json'
 
@@ -71,6 +72,11 @@ class DepthaiCamera():
          # Input image size
         if "input_size" in nnConfig:
             self.nn_shape_w, self.nn_shape_h = tuple(map(int, nnConfig.get("input_size").split('x')))
+
+        # Published for target
+        self.target_pub_inf = rospy.Publisher("target_detection/localisation", TargetLocalisation, queue_size=10)
+        # Target confidence
+        self.target_confidence_threshold = 0.8
 
         # Pulbish ros image data
         self.pub_image = rospy.Publisher(self.pub_topic, CompressedImage, queue_size=10)
@@ -127,6 +133,26 @@ class DepthaiCamera():
 
         cam_rgb.preview.link(xout_rgb.input)
 
+    # Function for target location
+    def target_location(self, detection):
+        msg_out = TargetLocalisation() # Initialise the msg
+
+        # Add the target information
+        if detection.label == 0:
+            msg_out.target_label = "drone"
+        else:
+            msg_out.target_label = "phone"
+        msg_out.target_id = detection.label
+        msg_out.frame_x = (detection.xmin + detection.xmax) / 2
+        msg_out.frame_y = (detection.ymin + detection.ymax) / 2
+
+        # Codes to check the information can add this Detected at x: {msg_out.frame_x}, y: {msg_out.frame_y}
+        rospy.loginfo(f'Target [{msg_out.target_label}] ')
+
+        self.target_pub_inf.publish(msg_out)
+        # rospy.loginfo("Target data published...")
+        
+
     def run(self):
         #self.rgb_camera()
         ############################### Run Model ###############################
@@ -181,12 +207,15 @@ class DepthaiCamera():
                         # print(detection)
                         # print("{},{},{},{},{},{},{}".format(detection.label,labels[detection.label],detection.confidence,detection.xmin, detection.ymin, detection.xmax, detection.ymax))
                         found_classes.append(detection.label)
+                        if detection.confidence > self.target_confidence_threshold:
+                            self.target_location(detection)
                         #print(dai.ImgDetection.getData(detection))
                     found_classes = np.unique(found_classes)
                     # print(found_classes)
                     overlay = self.show_yolo(frame, detections)
                 else:
                     print("Detection empty, trying again...")
+
                     continue
 
                 if frame is not None:
@@ -285,7 +314,7 @@ class DepthaiCamera():
             cam.setInterleaved(False)
             cam.preview.link(detection_nn.input)
             cam.setColorOrder(dai.ColorCameraProperties.ColorOrder.BGR)
-            cam.setFps(20.0)
+            cam.setFps(35.0)
             print("Using RGB camera...")
         elif cam_source == 'left':
             cam = pipeline.create(dai.node.MonoCamera)
