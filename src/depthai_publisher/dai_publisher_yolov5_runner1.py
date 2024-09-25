@@ -20,6 +20,8 @@ import rospy
 from sensor_msgs.msg import CompressedImage, Image, CameraInfo
 from cv_bridge import CvBridge, CvBridgeError
 from spar_msgs.msg import TargetLocalisation
+from geometry_msgs.msg import Point, PoseStamped
+from math import *
 
 ############################### ############################### Parameters ###############################
 # Global variables to deal with pipeline creation
@@ -75,8 +77,23 @@ class DepthaiCamera():
 
         # Published for target
         self.target_pub_inf = rospy.Publisher("target_detection/localisation", TargetLocalisation, queue_size=10)
+        
+        # Callback to save "current location" such that we can perform and return from a diversion to the correct location
+        self.sub_pose = rospy.Subscriber("uavasr/pose", PoseStamped, self.callback_pose)
+
+        # Pose
+        self.current_location = Point()
+
         # Target confidence
         self.target_confidence_threshold = 0.8
+        
+        # Variables for the target
+        self.epipen_drop = False
+        self.plb_tracker_drop = False
+
+        # Camera Variables
+        self.camera_FOV_x = 54 * (pi / 180) # [rad]
+        self.camera_FOV_y = 66 * (pi / 180) # [rad]
 
         # Pulbish ros image data
         self.pub_image = rospy.Publisher(self.pub_topic, CompressedImage, queue_size=10)
@@ -92,6 +109,12 @@ class DepthaiCamera():
         self.br = CvBridge()
 
         rospy.on_shutdown(lambda: self.shutdown())
+
+    # This function will check receive the current pose of the UAV constantly
+    def callback_pose(self, msg_in):
+        #rospy.loginfo("Pose Callback recieved/Triggered")
+        # Store the current position at all times so it can be accessed later
+        self.current_location = msg_in.pose.position
 
     def publish_camera_info(self, timer=None):
         # Create a publisher for the CameraInfo topic
@@ -151,7 +174,49 @@ class DepthaiCamera():
 
         self.target_pub_inf.publish(msg_out)
         # rospy.loginfo("Target data published...")
-        
+
+    # This function is used to translate between the camera frame and the world location when undertaking aruco detection
+    def target_frame_translation(self, camera_location):
+        # The initial location of the UAV
+        world_x = self.current_location.x
+        world_y = self.current_location.y
+        world_z = self.current_location.z
+
+        # Normalised position of the target within the camera frame [-1, 1] in both x- and y-directions
+        # Positive values correspond to positive values in the world frame
+        # The input camera location is given as the pixel position of the aruco centroid within the frame
+        camera_offset_x = (0.5 - camera_location[0]) / 0.5
+        camera_offset_y = (0.5 - camera_location[1]) / 0.5
+
+        # The offset from the UAV of the target, based on the location within the camera frame
+        offset_x = camera_offset_x * world_z * tan(self.camera_FOV_x / 2) 
+        offset_y = camera_offset_y * world_z * tan(self.camera_FOV_y / 2) 
+
+        # Add the offset to the initial location to determine the target location
+        world_x += offset_x
+        world_y += offset_y
+
+        # Store the world location in a single array to be returned by the function
+        world_location = [world_x, world_y]
+        return world_location
+    
+    def process_target_info(self, detection):
+        msg_out = TargetLocalisation()
+
+        frame_x = (detection.xmin + detection.xmax) / 2
+        frame_y = (detection.ymin + detection.ymax) / 2
+        location = self.target_frame_translation([frame_x, frame_y])
+
+        msg_out.target_label = labels[detection.label]
+        msg_out.target_id = detection.label
+        msg_out.frame_x = location[0]
+        msg_out.frame_y = location[1]
+        self.target_pub_inf.publish(msg_out)
+
+        # rospy.loginfo(f'UAV Location at x: {uav_location[0]}, y: {uav_location[1]}, z: {uav_location[2]}')
+        rospy.loginfo(f'Target [{labels[detection.label]}] Found at x: {location[0]}, y: {location[1]}!')
+        # self.pub_target_vocal.publish() # Send the target id, label, x, y
+
 
     def run(self):
         #self.rgb_camera()
@@ -207,8 +272,21 @@ class DepthaiCamera():
                         # print(detection)
                         # print("{},{},{},{},{},{},{}".format(detection.label,labels[detection.label],detection.confidence,detection.xmin, detection.ymin, detection.xmax, detection.ymax))
                         found_classes.append(detection.label)
-                        if detection.confidence > self.target_confidence_threshold:
-                            self.target_location(detection)
+                        if self.current_location.z > 2: # start detection at 1.5
+                            if detection.confidence > self.target_confidence_threshold:
+                                # self.target_location(detection)
+
+                                if detection.label == 0 and not self.plb_tracker_drop: # backpack
+                                    self.process_target_info(detection)
+                                    self.plb_tracker_drop = True
+                                elif detection.label == 1 and not self.epipen_drop: # person
+                                    self.process_target_info(detection)
+                                    self.epipen_drop = True
+
+
+                            # else: # person
+                            #     rospy.loginfo(f'asd')
+
                         #print(dai.ImgDetection.getData(detection))
                     found_classes = np.unique(found_classes)
                     # print(found_classes)
