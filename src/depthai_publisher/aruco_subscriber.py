@@ -116,10 +116,9 @@ class ArucoDetector():
 
                 # self.current_aruco_id = marker_ID
                 if marker_ID != self.previous_aruco_id:
+                    self.pub_aruco_vocal.publish(marker_ID)
                     rospy.loginfo("Aruco detected, ID: {}".format(marker_ID))
                     if self.desired_aruco_id == marker_ID and not self.FoundAruco:
-                        self.pub_aruco_vocal.publish(marker_ID)
-
                         frame_x = (top_left[0] + bottom_right[0]) / 2
                         frame_y = (top_left[1] + bottom_right[1]) / 2
                         aruco_location, uav_location = self.aruco_frame_translation([frame_x, frame_y])
