@@ -17,10 +17,12 @@ import cv2
 import numpy as np
 import depthai as dai
 import rospy
+import tf2_ros
 from sensor_msgs.msg import CompressedImage, Image, CameraInfo
 from cv_bridge import CvBridge, CvBridgeError
 from spar_msgs.msg import TargetLocalisation
 from geometry_msgs.msg import Point, PoseStamped, TransformStamped
+from std_msgs.msg import Time
 from math import *
 
 ############################### ############################### Parameters ###############################
@@ -77,8 +79,8 @@ class DepthaiCamera():
 
         # Publishers for target
         self.target_pub_inf = rospy.Publisher("target_detection/localisation", TargetLocalisation, queue_size=10)
-        self.target_pub_tf = rospy.Publisher("target_detection/tf", TransformStamped, queue_size=10)
-
+        self.pub_found = rospy.Publisher('/emulated_uav/target_found', Time, queue_size=10)
+        
         # Callback to save "current location" such that we can perform and return from a diversion to the correct location
         self.sub_pose = rospy.Subscriber("uavasr/pose", PoseStamped, self.callback_pose)
 
@@ -95,6 +97,9 @@ class DepthaiCamera():
         # Camera Variables
         self.camera_FOV_x = 54 * (pi / 180) # [rad]
         self.camera_FOV_y = 66 * (pi / 180) # [rad]
+
+        # Setup tf2 broadcaster and timestamp publisher
+        self.tfbr = tf2_ros.TransformBroadcaster()
 
         # Pulbish ros image data
         self.pub_image = rospy.Publisher(self.pub_topic, CompressedImage, queue_size=10)
@@ -239,7 +244,8 @@ class DepthaiCamera():
         msg_out_tf.transform.rotation.z = 0
         msg_out_tf.transform.rotation.y = 0
         msg_out_tf.transform.rotation.w = 1.0
-        self.target_pub_tf.publish(msg_out_tf)
+        self.tfbr.sendTransform(msg_out_tf)
+        self.pub_found.publish(time_found)
 
         # rospy.loginfo(f'Target [{labels[detection.label]}] x_offset: {target_offsets[0]}, y_offset: {target_offsets[1]}!')
         # rospy.loginfo(f'UAV Location at x: {uav_location[0]}, y: {uav_location[1]}, z: {uav_location[2]}')
