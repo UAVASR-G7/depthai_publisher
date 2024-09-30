@@ -91,8 +91,8 @@ class DepthaiCamera():
         self.target_confidence_threshold = 0.8
         
         # Variables for the target
-        self.epipen_drop = False
-        self.plb_tracker_drop = False
+        self.first_target = False
+        self.second_target = False
 
         # Camera Variables
         self.camera_FOV_x = 54 * (pi / 180) # [rad]
@@ -161,25 +161,6 @@ class DepthaiCamera():
         xout_rgb.setStreamName("video")
 
         cam_rgb.preview.link(xout_rgb.input)
-
-    # Function for target location
-    def target_location(self, detection):
-        msg_out = TargetLocalisation() # Initialise the msg
-
-        # Add the target information
-        if detection.label == 0:
-            msg_out.target_label = "backpack"
-        else:
-            msg_out.target_label = "person"
-        msg_out.target_id = detection.label
-        msg_out.frame_x = (detection.xmin + detection.xmax) / 2
-        msg_out.frame_y = (detection.ymin + detection.ymax) / 2
-
-        # Codes to check the information can add this Detected at x: {msg_out.frame_x}, y: {msg_out.frame_y}
-        rospy.loginfo(f'Target [{msg_out.target_label}] ')
-
-        self.target_pub_inf.publish(msg_out)
-        # rospy.loginfo("Target data published...")
 
     def target_offset(self, camera_location):
         # The initial location of the UAV
@@ -310,14 +291,13 @@ class DepthaiCamera():
                         found_classes.append(detection.label)
                         if self.current_location.z > 2: # start detection at 1.5
                             if detection.confidence > self.target_confidence_threshold:
-                                # self.target_location(detection)
 
-                                if detection.label == 0 and not self.plb_tracker_drop: # backpack
+                                if detection.label == 0 and not self.first_target: # backpack
                                     self.process_target_info(detection)
-                                    self.plb_tracker_drop = True
-                                elif detection.label == 1 and not self.epipen_drop: # person
+                                    self.first_target = True
+                                elif detection.label == 1 and not self.second_target: # person
                                     self.process_target_info(detection)
-                                    self.epipen_drop = True
+                                    self.second_target = True
 
 
                             # else: # person
