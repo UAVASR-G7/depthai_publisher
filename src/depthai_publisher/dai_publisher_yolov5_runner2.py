@@ -222,7 +222,7 @@ class DepthaiCamera():
         msg_out_tf.child_frame_id = "target"
         
         msg_out_tf.transform.translation.x = - target_offsets[0] + 0.10
-        msg_out_tf.transform.translation.y = target_offsets[1]
+        msg_out_tf.transform.translation.y = - target_offsets[1]
         msg_out_tf.transform.translation.z = world_z - 0.15
         msg_out_tf.transform.rotation.x = 0
         msg_out_tf.transform.rotation.z = 0
