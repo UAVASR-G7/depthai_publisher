@@ -35,7 +35,7 @@ syncNN = True
 # model path
 modelsPath = "/home/cdrone/catkin_ws/src/depthai_publisher/src/depthai_publisher/models"
 # modelName = 'exp31Yolov5_ov21.4_6sh'
-modelName = 'mission2v1'
+modelName = 'mission2v4'
 # confJson = 'exp31Yolov5.json'
 confJson = 'best.json'
 
@@ -83,7 +83,9 @@ class DepthaiCamera():
         self.pub_found = rospy.Publisher('/emulated_uav/target_found', Time, queue_size=10)
         
         # Callback to save "current location" such that we can perform and return from a diversion to the correct location
-        self.sub_pose = rospy.Subscriber("uavasr/pose", PoseStamped, self.callback_pose)
+        # self.sub_pose = rospy.Subscriber("uavasr/pose", PoseStamped, self.callback_pose) # Use for emulator
+        # self.sub_pose = rospy.Subscriber("mavros/local_position/pose", PoseStamped, self.callback_pose) # Use for flight
+        self.sub_pose = rospy.Subscriber("mavros/local_position/pose", PoseStamped, self.callback_pose) # Use for flight
 
         # Pose
         self.current_location = Point()

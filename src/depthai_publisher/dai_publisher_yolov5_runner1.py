@@ -35,7 +35,7 @@ syncNN = True
 # model path
 modelsPath = "/home/cdrone/catkin_ws/src/depthai_publisher/src/depthai_publisher/models"
 # modelName = 'exp31Yolov5_ov21.4_6sh'
-modelName = 'mission1v1'
+modelName = 'mission1v3'
 # confJson = 'exp31Yolov5.json'
 confJson = 'best.json'
 
@@ -82,7 +82,9 @@ class DepthaiCamera():
         self.pub_found = rospy.Publisher('/emulated_uav/target_found', Time, queue_size=10)
         
         # Callback to save "current location" such that we can perform and return from a diversion to the correct location
-        self.sub_pose = rospy.Subscriber("uavasr/pose", PoseStamped, self.callback_pose)
+        self.sub_pose = rospy.Subscriber("uavasr/pose", PoseStamped, self.callback_pose) # Use for emulator
+        # self.sub_pose = rospy.Subscriber("mavros/vision_position/pose", PoseStamped, self.callback_pose) # Use for flight
+        # self.sub_pose = rospy.Subscriber("mavros/local_position/pose", PoseStamped, self.callback_pose) # Use for flight
 
         # Pose
         self.current_location = Point()
@@ -218,8 +220,8 @@ class DepthaiCamera():
         msg_out_tf.header.frame_id = "camera"
         msg_out_tf.child_frame_id = "target"
         
-        msg_out_tf.transform.translation.x = - target_offsets[0] + 0.10
-        msg_out_tf.transform.translation.y = target_offsets[1]
+        msg_out_tf.transform.translation.x = target_offsets[0] - 0.10
+        msg_out_tf.transform.translation.y = -target_offsets[1]
         msg_out_tf.transform.translation.z = world_z - 0.15
         msg_out_tf.transform.rotation.x = 0
         msg_out_tf.transform.rotation.z = 0
@@ -229,7 +231,7 @@ class DepthaiCamera():
         self.pub_found.publish(time_found)
 
         # rospy.loginfo(f'Target [{labels[detection.label]}] x_offset: {target_offsets[0]}, y_offset: {target_offsets[1]}!')
-        # rospy.loginfo(f'UAV Location at x: {uav_location[0]}, y: {uav_location[1]}, z: {uav_location[2]}')
+        #rospy.loginfo(f'UAV Location at x: {uav_location[0]}, y: {uav_location[1]}, z: {uav_location[2]}')
         rospy.loginfo(f'Target [{labels[detection.label]}] Found at x: {location[0]}, y: {location[1]}!, z: {world_z}')
         # self.pub_target_vocal.publish() # Send the target id, label, x, y
 
@@ -289,9 +291,9 @@ class DepthaiCamera():
                         # print(detection)
                         # print("{},{},{},{},{},{},{}".format(detection.label,labels[detection.label],detection.confidence,detection.xmin, detection.ymin, detection.xmax, detection.ymax))
                         found_classes.append(detection.label)
-                        if self.current_location.z > 2: # start detection at 1.5
+                        if self.current_location.z > 1.5: # start detection at 1.5
                             if detection.confidence > self.target_confidence_threshold:
-
+                                #rospy.loginfo(f"Confidence:{detection.confidence}")
                                 if detection.label == 0 and not self.first_target: # backpack
                                     self.process_target_info(detection)
                                     self.first_target = True
