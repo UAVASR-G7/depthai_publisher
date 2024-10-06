@@ -90,6 +90,12 @@ class ArucoDetector():
         offset_x = camera_offset_x * world_z * tan(self.camera_FOV_x / 2) 
         offset_y = camera_offset_y * world_z * tan(self.camera_FOV_y / 2) 
 
+        # To make sure that it follows the same axis orientation as the uav
+        if (offset_x > 0 and offset_y < 0) or (offset_x < 0 and offset_y > 0):
+            offset_y = -offset_y
+        else:
+            offset_x = -offset_x
+
         # Add the offset to the initial location to determine the target location
         world_x += offset_x
         world_y += offset_y

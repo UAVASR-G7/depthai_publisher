@@ -133,13 +133,21 @@ class DepthaiCamera():
         camera_info_msg.width = self.nn_shape_w  # Set the width of the camera image
 
         # Set the camera intrinsic matrix (fx, fy, cx, cy)
-        camera_info_msg.K = [615.381, 0.0, 320.0, 0.0, 615.381, 240.0, 0.0, 0.0, 1.0]
+        # camera_info_msg.K = [615.381, 0.0, 320.0, 0.0, 615.381, 240.0, 0.0, 0.0, 1.0] # old
+        camera_info_msg.K = [619.994, 0.0, 217.039, 0.0, 620.141, 199.928, 0.0, 0.0, 1.0]
+
         # Set the distortion parameters (k1, k2, p1, p2, k3)
-        camera_info_msg.D = [-0.10818, 0.12793, 0.00000, 0.00000, -0.04204]
+        # camera_info_msg.D = [-0.10818, 0.12793, 0.00000, 0.00000, -0.04204] # old
+        camera_info_msg.D = [0.134107, -0.71825, -0.00575186, 0.00481137, 0.0]
+
         # Set the rectification matrix (identity matrix)
+        # camera_info_msg.R = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0] # old
         camera_info_msg.R = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
+
         # Set the projection matrix (P)
-        camera_info_msg.P = [615.381, 0.0, 320.0, 0.0, 0.0, 615.381, 240.0, 0.0, 0.0, 0.0, 1.0, 0.0]
+        # camera_info_msg.P = [615.381, 0.0, 320.0, 0.0, 0.0, 615.381, 240.0, 0.0, 0.0, 0.0, 1.0, 0.0] # old
+        camera_info_msg.P = [622.481, 0.0, 217.663, 0.0, 0.0, 622.491, 198.122, 0.0, 0.0, 0.0, 1.0, 0.0]
+
         # Set the distortion model
         camera_info_msg.distortion_model = "plumb_bob"
         # Set the timestamp
@@ -163,21 +171,36 @@ class DepthaiCamera():
 
         cam_rgb.preview.link(xout_rgb.input)
 
-    def target_offset(self, camera_location):
-        # The initial location of the UAV
+    def target_offset(self, camera_location): ### NEED TO CLEAN THIS FUNCTION
+        # The initial location of the UAV 
         world_z = self.current_location.z
 
         # Normalised position of the target within the camera frame [-1, 1] in both x- and y-directions
         # Positive values correspond to positive values in the world frame
         # The input camera location is given as the pixel position of the aruco centroid within the frame
-        camera_offset_x = (208 - camera_location[0]) / 208
-        camera_offset_y = (208 - camera_location[1]) / 208
+        camera_offset_x = (0.5 - camera_location[0]) / 0.5
+        camera_offset_y = (0.5 - camera_location[1]) / 0.5
+
+        # rospy.loginfo(f'offset_x: {camera_offset_x}, offset_y: {camera_offset_y}!')
 
         # The offset from the UAV of the target, based on the location within the camera frame
         offset_x = camera_offset_x * world_z * tan(self.camera_FOV_x / 2) 
         offset_y = camera_offset_y * world_z * tan(self.camera_FOV_y / 2) 
 
-        return [offset_x, offset_y]
+        # rospy.loginfo(f'offset_x: {offset_x}, offset_y: {offset_y}!')
+
+        # if offset_x > 0 and offset_y < 0:
+        #     return [offset_x, -offset_y]
+        # elif offset_x < 0 and offset_y < 0:
+        #     return [-offset_x, offset_y]
+        # elif offset_x < 0 and offset_y > 0:
+        #     return [offset_x, -offset_y]
+        # elif offset_x > 0 and offset_y > 0:
+        #     return [-offset_x, offset_y]
+        if (offset_x > 0 and offset_y < 0) or (offset_x < 0 and offset_y > 0):
+            return [offset_x, -offset_y]
+        else:
+            return [-offset_x, offset_y]
     
     # This function is used to translate between the camera frame and the world location when undertaking aruco detection
     def target_world_location(self, camera_location):
@@ -219,8 +242,8 @@ class DepthaiCamera():
         msg_out_tf.header.frame_id = "camera"
         msg_out_tf.child_frame_id = "target"
         
-        msg_out_tf.transform.translation.x = -target_offsets[0] + 0.10
-        msg_out_tf.transform.translation.y = target_offsets[1]
+        msg_out_tf.transform.translation.x = target_offsets[0] - 0.10
+        msg_out_tf.transform.translation.y = target_offsets[1] 
         msg_out_tf.transform.translation.z = world_z - 0.15
         msg_out_tf.transform.rotation.x = 0
         msg_out_tf.transform.rotation.z = 0
@@ -289,7 +312,9 @@ class DepthaiCamera():
                     for detection in detections:
                         # print(detection)
                         # print("{},{},{},{},{},{},{}".format(detection.label,labels[detection.label],detection.confidence,detection.xmin, detection.ymin, detection.xmax, detection.ymax))
+                        # rospy.loginfo(f'Target [{labels[detection.label]}] Found at x-min: {detection.xmin} x-max: {detection.xmax}, y-min: {detection.ymin} y-max: {detection.ymax}')
                         found_classes.append(detection.label)
+
                         if self.current_location.z > 1.5: # start detection at 1.5
                             if detection.confidence > self.target_confidence_threshold:
                                 #rospy.loginfo(f"Confidence:{detection.confidence}")
