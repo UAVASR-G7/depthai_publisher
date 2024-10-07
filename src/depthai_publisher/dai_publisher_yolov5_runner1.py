@@ -215,7 +215,7 @@ class DepthaiCamera():
 
         # Store the world location in a single array to be returned by the function
         world_location = [world_x, world_y]
-        return world_location
+        return world_location, offsets
     
     def process_target_info(self, detection):
         # Initialise
@@ -227,8 +227,10 @@ class DepthaiCamera():
         # Calculate location of target
         frame_x = (detection.xmin + detection.xmax) / 2
         frame_y = (detection.ymin + detection.ymax) / 2
-        target_offsets = self.target_offset([frame_x, frame_y])
-        location = self.target_world_location([frame_x, frame_y])
+        # target_offsets = self.target_offset([frame_x, frame_y])
+        location, target_offsets = self.target_world_location([frame_x, frame_y])
+        # location = out1
+        # target_offsets = out2
 
         # Localisation msg
         msg_out_localisation.target_label = labels[detection.label]
@@ -242,7 +244,7 @@ class DepthaiCamera():
         msg_out_tf.header.frame_id = "camera"
         msg_out_tf.child_frame_id = "target"
         
-        msg_out_tf.transform.translation.x = target_offsets[0] - 0.10
+        msg_out_tf.transform.translation.x = target_offsets[0] + 0.10
         msg_out_tf.transform.translation.y = target_offsets[1] 
         msg_out_tf.transform.translation.z = world_z - 0.15
         msg_out_tf.transform.rotation.x = 0
