@@ -229,14 +229,10 @@ class DepthaiCamera():
         frame_y = (detection.ymin + detection.ymax) / 2
         # target_offsets = self.target_offset([frame_x, frame_y])
         location, target_offsets = self.target_world_location([frame_x, frame_y])
-        # location = out1
-        # target_offsets = out2
 
         # Localisation msg
         msg_out_localisation.target_label = labels[detection.label]
         msg_out_localisation.target_id = detection.label
-        msg_out_localisation.frame_x = location[0]
-        msg_out_localisation.frame_y = location[1]
         self.target_pub_inf.publish(msg_out_localisation)
 
         # TF msg
@@ -254,11 +250,7 @@ class DepthaiCamera():
         self.tfbr.sendTransform(msg_out_tf)
         self.pub_found.publish(time_found)
 
-        # rospy.loginfo(f'Target [{labels[detection.label]}] x_offset: {target_offsets[0]}, y_offset: {target_offsets[1]}!')
-        #rospy.loginfo(f'UAV Location at x: {uav_location[0]}, y: {uav_location[1]}, z: {uav_location[2]}')
-        rospy.loginfo(f'Target [{labels[detection.label]}] Found at x: {location[0]}, y: {location[1]}!, z: {world_z}')
-        # self.pub_target_vocal.publish() # Send the target id, label, x, y
-
+        rospy.loginfo(f'Target [{labels[detection.label]}] Detected')
 
     def run(self):
         #self.rgb_camera()
@@ -326,10 +318,6 @@ class DepthaiCamera():
                                 elif detection.label == 1 and not self.second_target: # person
                                     self.process_target_info(detection)
                                     self.second_target = True
-
-
-                            # else: # person
-                            #     rospy.loginfo(f'asd')
 
                         #print(dai.ImgDetection.getData(detection))
                     found_classes = np.unique(found_classes)
