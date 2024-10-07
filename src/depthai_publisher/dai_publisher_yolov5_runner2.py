@@ -178,7 +178,12 @@ class DepthaiCamera():
         offset_x = camera_offset_x * world_z * tan(self.camera_FOV_x / 2) 
         offset_y = camera_offset_y * world_z * tan(self.camera_FOV_y / 2) 
 
-        return [offset_x, offset_y]
+        if (offset_x > 0 and offset_y < 0) or (offset_x < 0 and offset_y > 0):
+            return [offset_x, -offset_y]
+        else:
+            return [-offset_x, offset_y]
+
+        # return [offset_x, offset_y]
     
     # This function is used to translate between the camera frame and the world location when undertaking aruco detection
     def target_world_location(self, camera_location):
@@ -220,7 +225,7 @@ class DepthaiCamera():
         msg_out_tf.header.frame_id = "camera"
         msg_out_tf.child_frame_id = "target"
         
-        msg_out_tf.transform.translation.x = -target_offsets[0] + 0.10
+        msg_out_tf.transform.translation.x = target_offsets[0] + 0.10
         msg_out_tf.transform.translation.y = target_offsets[1]
         msg_out_tf.transform.translation.z = world_z - 0.15
         msg_out_tf.transform.rotation.x = 0
