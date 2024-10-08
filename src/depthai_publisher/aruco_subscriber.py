@@ -11,10 +11,10 @@ from spar_msgs.msg import ArucoLocalisation
 from math import *
 import numpy as np
 import threading 
-import time
+
 
 class ArucoDetector():
-    aruco_dict = cv2.aruco.Dictionary_get(cv2.aruco.DICT_5X5_100)
+    aruco_dict = cv2.aruco.Dictionary_get(cv2.aruco.DICT_4X4_100)
     aruco_params = cv2.aruco.DetectorParameters_create()
 
     frame_sub_topic = '/depthai_node/image/compressed'
@@ -22,9 +22,10 @@ class ArucoDetector():
     def __init__(self):
         self.aruco_pub = rospy.Publisher(
             '/processed_aruco/image/compressed', CompressedImage, queue_size=10)
-
-        # Use for emulator
-        self.sub_pose = rospy.Subscriber("uavasr/pose", PoseStamped, self.callback_pose)
+        
+        # Callback to save "current location" such that we can perform and return from a diversion to the correct location
+        self.sub_pose = rospy.Subscriber("mavros/local_position/pose", PoseStamped, self.callback_pose) # For flight
+        # self.sub_pose = rospy.Subscriber("uavasr/pose", PoseStamped, self.callback_pose) # Use for emulator
         
         self.aruco_pub_inf = rospy.Publisher('/processed_aruco/localisation', ArucoLocalisation, queue_size=10)
         self.br = CvBridge()
@@ -38,23 +39,24 @@ class ArucoDetector():
         # Pose
         self.current_location = Point()
 
-        self.pub_aruco_vocal = rospy.Publisher('vocal/aruco', Int32, queue_size=10)
+        # Published for GCS VOCAL
+        # self.pub_land_vocal = rospy.Publisher('vocal/land', Bool, queue_size = 10)
+        self.pub_aruco_vocal = rospy.Publisher('vocal/aruco', Int32, queue_size = 10)
+        # self.pub_target_vocal = rospy.Publisher('payload/target', TargetLocalisation, queue_size = 10)
 
         # Aruco Variables
-        self.desired_aruco_id = 72 # Need to change to desired Aruco
+        self.desired_aruco_id = 6 # Changed to the aruco marker to land
         self.previous_aruco_id = -1
-        self.FoundAruco = False
-        self.aruco_detected = False
-        self.detected_positions = []
-        self.last_seen_time = time.time()
-        self.detection_timeout = 1.0  # Time in seconds to wait after losing detection to publish average position
-        self.detected_markers = {}  # Dictionary to track detected markers and whether they have been logged
+        self.FoundAruco = False # If aruco is not found, land at origin (aruco landing contigency)
 
         if not rospy.is_shutdown():
             self.frame_sub = rospy.Subscriber(
                 self.frame_sub_topic, CompressedImage, self.img_callback)
 
+    # This function will check receive the current pose of the UAV constantly
     def callback_pose(self, msg_in):
+        #rospy.loginfo("Pose Callback recieved/Triggered")
+        # Store the current position at all times so it can be accessed later
         self.current_location = msg_in.pose.position
 
     def img_callback(self, msg_in):
@@ -65,42 +67,46 @@ class ArucoDetector():
                 rospy.logerr(e)
 
             aruco = self.find_aruco(frame)
-
-            # Publish the averaged location if the marker has not been detected for a while
-            current_time = time.time()
-            if not self.aruco_detected and len(self.detected_positions) > 0:
-                if current_time - self.last_seen_time >= self.detection_timeout:
-                    self.publish_average_location()
-                    self.detected_positions.clear()  # Clear the list after publishing
-
             self.publish_to_ros(aruco)
-            self.aruco_detected = False
-            self.time_finished_processing = rospy.Time.now()
+            # self.publish_marker(aruco)
 
+            self.time_finished_processing = rospy.Time.now()
+	
+    # This function is used to translate between the camera frame and the world location when undertaking aruco detection
     def aruco_frame_translation(self, camera_location):
+        # The initial location of the UAV
         world_x = self.current_location.x
         world_y = self.current_location.y
         world_z = self.current_location.z
         uav_location = [world_x, world_y, world_z]
 
-        camera_offset_x = (208 - camera_location[0]) / 208 #208
+        # Normalised position of the target within the camera frame [-1, 1] in both x- and y-directions
+        # Positive values correspond to positive values in the world frame
+        # The input camera location is given as the pixel position of the aruco centroid within the frame
+        camera_offset_x = (208 - camera_location[0]) / 208
         camera_offset_y = (208 - camera_location[1]) / 208
 
+        # The offset from the UAV of the target, based on the location within the camera frame
         offset_x = camera_offset_x * world_z * tan(self.camera_FOV_x / 2) 
         offset_y = camera_offset_y * world_z * tan(self.camera_FOV_y / 2) 
 
+        # To make sure that it follows the same axis orientation as the uav
         if (offset_x > 0 and offset_y < 0) or (offset_x < 0 and offset_y > 0):
             offset_y = -offset_y
         else:
             offset_x = -offset_x
 
-        world_x += offset_x
-        world_y += offset_y 
+        # Add the offset to the initial location to determine the target location
+        world_x += offset_x 
+        world_y += offset_y
 
+        # Store the world location in a single array to be returned by the function
         world_location = [world_x, world_y, world_z]
         return world_location, uav_location
 
     def find_aruco(self, frame):
+        msg_out = ArucoLocalisation()
+
         (corners, ids, _) = cv2.aruco.detectMarkers(
             frame, self.aruco_dict, parameters=self.aruco_params)
 
@@ -116,51 +122,41 @@ class ArucoDetector():
                 bottom_left = (int(bottom_left[0]), int(bottom_left[1]))
                 top_left = (int(top_left[0]), int(top_left[1]))
 
-                # Log message and publish ID once per detection
-                if marker_ID not in self.detected_markers:
+                # self.current_aruco_id = marker_ID
+                if marker_ID != self.previous_aruco_id:
                     self.pub_aruco_vocal.publish(marker_ID)
                     rospy.loginfo("Aruco detected, ID: {}".format(marker_ID))
-                    self.detected_markers[marker_ID] = True
-
-                if marker_ID == self.desired_aruco_id:
-                    frame_x = (top_left[0] + bottom_right[0]) / 2
-                    frame_y = (top_left[1] + bottom_right[1]) / 2
-                    aruco_location, _ = self.aruco_frame_translation([frame_x, frame_y])
-
-                    # Store detected position for averaging
-                    self.detected_positions.append(aruco_location)
-                    self.aruco_detected = True
-                    self.last_seen_time = time.time()
+                    if self.desired_aruco_id == marker_ID and not self.FoundAruco:
+                        frame_x = (top_left[0] + bottom_right[0]) / 2
+                        frame_y = (top_left[1] + bottom_right[1]) / 2
+                        aruco_location, uav_location = self.aruco_frame_translation([frame_x, frame_y])
+                        rospy.loginfo(f'UAV Location at x: {uav_location[0]}, y: {uav_location[1]}, z: {uav_location[2]}')
+                        rospy.loginfo(f'Desired Aruco Marker {marker_ID} Detected at x: {aruco_location[0]}, y: {aruco_location[1]}')
+                        msg_out.frame_x = aruco_location[0]
+                        msg_out.frame_y = aruco_location[1]
+                        msg_out.aruco_id = marker_ID
+                        self.aruco_pub_inf.publish(msg_out)
+                        self.FoundAruco = True
+                    self.previous_aruco_id = marker_ID
 
                 cv2.line(frame, top_left, top_right, (0, 255, 0), 2)
                 cv2.line(frame, top_right, bottom_right, (0, 255, 0), 2)
                 cv2.line(frame, bottom_right, bottom_left, (0, 255, 0), 2)
                 cv2.line(frame, bottom_left, top_left, (0, 255, 0), 2)
 
-                cv2.putText(frame, str(marker_ID), (top_left[0], top_right[1] - 15), cv2.FONT_HERSHEY_COMPLEX, 0.5, (0, 255, 0), 2)
+                cv2.putText(frame, str(
+                    marker_ID), (top_left[0], top_right[1] - 15), cv2.FONT_HERSHEY_COMPLEX, 0.5, (0, 255, 0), 2)
 
         return frame
-
-    def publish_average_location(self):
-        if len(self.detected_positions) == 0:
-            return
-
-        avg_location = np.mean(self.detected_positions, axis=0)
-        msg_out = ArucoLocalisation()
-        msg_out.frame_x = avg_location[0]
-        msg_out.frame_y = avg_location[1]
-        msg_out.aruco_id = self.desired_aruco_id
-
-        rospy.loginfo(f'Desired Aruco: [{self.desired_aruco_id}] Found. Aruco Location at x: {avg_location[0]}, y: {avg_location[1]}')
-        self.aruco_pub_inf.publish(msg_out)
 
     def publish_to_ros(self, frame):
         msg_out = CompressedImage()
         msg_out.header.stamp = rospy.Time.now()
         msg_out.format = "jpeg"
-        msg_out.data = np.array(cv2.imencode('.jpg', frame)[1]).tobytes()
+        msg_out.data = np.array(cv2.imencode('.jpg', frame)[1]).tostring()
 
         self.aruco_pub.publish(msg_out)
+
 
 def main():
     rospy.init_node('EGB349_vision', anonymous=True)

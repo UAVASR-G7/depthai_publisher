@@ -35,7 +35,7 @@ syncNN = True
 # model path
 modelsPath = "/home/cdrone/catkin_ws/src/depthai_publisher/src/depthai_publisher/models"
 # modelName = 'exp31Yolov5_ov21.4_6sh'
-modelName = 'mission1v3'
+modelName = 'mission1v2'
 # confJson = 'exp31Yolov5.json'
 confJson = 'best.json'
 
@@ -82,14 +82,14 @@ class DepthaiCamera():
         self.pub_found = rospy.Publisher('/emulated_uav/target_found', Time, queue_size=10)
         
         # Callback to save "current location" such that we can perform and return from a diversion to the correct location
-        #self.sub_pose = rospy.Subscriber("mavros/local_position/pose", PoseStamped, self.callback_pose) # Use for flight
-        self.sub_pose = rospy.Subscriber("uavasr/pose", PoseStamped, self.callback_pose) # Use for emulator
+        self.sub_pose = rospy.Subscriber("mavros/local_position/pose", PoseStamped, self.callback_pose) # Use for flight
+        # self.sub_pose = rospy.Subscriber("uavasr/pose", PoseStamped, self.callback_pose) # Use for emulator
 
         # Pose
         self.current_location = Point()
 
         # Target confidence
-        self.target_confidence_threshold = 0.8
+        self.target_confidence_threshold = 0.9
         
         # Variables for the target
         self.first_target = False
@@ -309,7 +309,7 @@ class DepthaiCamera():
                         # rospy.loginfo(f'Target [{labels[detection.label]}] Found at x-min: {detection.xmin} x-max: {detection.xmax}, y-min: {detection.ymin} y-max: {detection.ymax}')
                         found_classes.append(detection.label)
 
-                        if self.current_location.z > 1.5: # start detection at 1.5
+                        if self.current_location.z > 2: # start detection at 1.5
                             if detection.confidence > self.target_confidence_threshold:
                                 #rospy.loginfo(f"Confidence:{detection.confidence}")
                                 if detection.label == 0 and not self.first_target: # backpack
@@ -420,7 +420,7 @@ class DepthaiCamera():
         # Define a source - color camera
         if cam_source == 'rgb':
             cam = pipeline.create(dai.node.ColorCamera)
-            # cam.initialControl.setManualFocus(100)
+            cam.initialControl.setManualFocus(120)
             cam.setPreviewSize(self.nn_shape_w,self.nn_shape_h)
             cam.setInterleaved(False)
             cam.preview.link(detection_nn.input)
