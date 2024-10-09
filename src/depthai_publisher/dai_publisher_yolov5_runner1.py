@@ -82,8 +82,8 @@ class DepthaiCamera():
         self.pub_found = rospy.Publisher('/emulated_uav/target_found', Time, queue_size=10)
         
         # Callback to save "current location" such that we can perform and return from a diversion to the correct location
-        self.sub_pose = rospy.Subscriber("mavros/local_position/pose", PoseStamped, self.callback_pose) # Use for flight
-        # self.sub_pose = rospy.Subscriber("uavasr/pose", PoseStamped, self.callback_pose) # Use for emulator
+        # self.sub_pose = rospy.Subscriber("mavros/local_position/pose", PoseStamped, self.callback_pose) # Use for flight
+        self.sub_pose = rospy.Subscriber("uavasr/pose", PoseStamped, self.callback_pose) # Use for emulator
 
         # Pose
         self.current_location = Point()
@@ -233,6 +233,8 @@ class DepthaiCamera():
         # Localisation msg
         msg_out_localisation.target_label = labels[detection.label]
         msg_out_localisation.target_id = detection.label
+        msg_out_localisation.frame_x = location[0]
+        msg_out_localisation.frame_y = location[1]
         self.target_pub_inf.publish(msg_out_localisation)
 
         # TF msg

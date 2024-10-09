@@ -24,8 +24,8 @@ class ArucoDetector():
             '/processed_aruco/image/compressed', CompressedImage, queue_size=10)
         
         # Callback to save "current location" such that we can perform and return from a diversion to the correct location
-        self.sub_pose = rospy.Subscriber("mavros/local_position/pose", PoseStamped, self.callback_pose) # For flight
-        # self.sub_pose = rospy.Subscriber("uavasr/pose", PoseStamped, self.callback_pose) # Use for emulator
+        # self.sub_pose = rospy.Subscriber("mavros/local_position/pose", PoseStamped, self.callback_pose) # For flight
+        self.sub_pose = rospy.Subscriber("uavasr/pose", PoseStamped, self.callback_pose) # Use for emulator
         
         self.aruco_pub_inf = rospy.Publisher('/processed_aruco/localisation', ArucoLocalisation, queue_size=10)
         self.br = CvBridge()
