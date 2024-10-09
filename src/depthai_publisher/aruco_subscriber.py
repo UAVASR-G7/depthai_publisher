@@ -5,7 +5,7 @@ import cv2
 import rospy
 from sensor_msgs.msg import CompressedImage
 from cv_bridge import CvBridge, CvBridgeError
-from std_msgs.msg import Int32
+from std_msgs.msg import Int32, Bool
 from geometry_msgs.msg import Point, PoseStamped
 from spar_msgs.msg import ArucoLocalisation
 from math import *
@@ -26,7 +26,9 @@ class ArucoDetector():
         # Callback to save "current location" such that we can perform and return from a diversion to the correct location
         # self.sub_pose = rospy.Subscriber("mavros/local_position/pose", PoseStamped, self.callback_pose) # For flight
         self.sub_pose = rospy.Subscriber("uavasr/pose", PoseStamped, self.callback_pose) # Use for emulator
-        
+        #
+        self.sub_aruco_location = rospy.Subscriber('/processed_aruco/location', Bool, self.callback_stop)
+
         self.aruco_pub_inf = rospy.Publisher('/processed_aruco/localisation', ArucoLocalisation, queue_size=10)
         self.br = CvBridge()
         self.last_msg_time = rospy.Time(0)
@@ -48,6 +50,7 @@ class ArucoDetector():
         self.desired_aruco_id = 6 # Changed to the aruco marker to land
         self.previous_aruco_id = -1
         self.FoundAruco = False # If aruco is not found, land at origin (aruco landing contigency)
+        self.ArucoLand = False
 
         if not rospy.is_shutdown():
             self.frame_sub = rospy.Subscriber(
@@ -58,6 +61,12 @@ class ArucoDetector():
         #rospy.loginfo("Pose Callback recieved/Triggered")
         # Store the current position at all times so it can be accessed later
         self.current_location = msg_in.pose.position
+
+    def callback_stop(self, msg_in):
+        if msg_in:
+            self.ArucoLand = True
+        else:
+            self.ArucoLand = False
 
     def img_callback(self, msg_in):
         if msg_in.header.stamp > self.last_msg_time:
@@ -148,6 +157,16 @@ class ArucoDetector():
                         self.aruco_pub_inf.publish(msg_out)
                         self.FoundAruco = True
                     self.previous_aruco_id = marker_ID
+                if self.ArucoLand:
+                    frame_x = (top_left[0] + bottom_right[0]) / 2
+                    frame_y = (top_left[1] + bottom_right[1]) / 2
+                    aruco_location, uav_location = self.aruco_frame_translation([frame_x, frame_y])
+                    msg_out.frame_x = aruco_location[0]
+                    msg_out.frame_y = aruco_location[1]
+                    msg_out.aruco_id = marker_ID
+                    self.aruco_pub_inf.publish(msg_out)
+                    self.ArucoLand = False
+
 
                 cv2.line(frame, top_left, top_right, (0, 255, 0), 2)
                 cv2.line(frame, top_right, bottom_right, (0, 255, 0), 2)

@@ -22,7 +22,7 @@ from sensor_msgs.msg import CompressedImage, Image, CameraInfo
 from cv_bridge import CvBridge, CvBridgeError
 from spar_msgs.msg import TargetLocalisation
 from geometry_msgs.msg import Point, PoseStamped, TransformStamped
-from std_msgs.msg import Time
+from std_msgs.msg import Time, Bool
 from math import *
 
 ############################### ############################### Parameters ###############################
@@ -80,11 +80,13 @@ class DepthaiCamera():
         # Publishers for target
         self.target_pub_inf = rospy.Publisher("target_detection/localisation", TargetLocalisation, queue_size=10)
         self.pub_found = rospy.Publisher('/emulated_uav/target_found', Time, queue_size=10)
-        
+        self.target_stop = rospy.Publisher('target_detection/stop', Bool, queue_size=10)
+        # self.start_roi = rospy.Subscriber('target_detection/stop', Bool, self.callback_stop)
+
         # Callback to save "current location" such that we can perform and return from a diversion to the correct location
         # self.sub_pose = rospy.Subscriber("mavros/local_position/pose", PoseStamped, self.callback_pose) # Use for flight
         self.sub_pose = rospy.Subscriber("uavasr/pose", PoseStamped, self.callback_pose) # Use for emulator
-
+        self.sub_target_location = rospy.Subscriber('target_detection/location', Bool, self.callback_stop)
         # Pose
         self.current_location = Point()
 
@@ -92,6 +94,8 @@ class DepthaiCamera():
         self.target_confidence_threshold = 0.9
         
         # Variables for the target
+        # self.target_label = ""
+        self.start_detection = False
         self.first_target = False
         self.second_target = False
 
@@ -122,6 +126,13 @@ class DepthaiCamera():
         #rospy.loginfo("Pose Callback recieved/Triggered")
         # Store the current position at all times so it can be accessed later
         self.current_location = msg_in.pose.position
+
+    # asdadsadas
+    def callback_stop(self, msg_in):
+        if msg_in.data:
+            self.start_detection = True
+        else:
+            self.start_detection = False
 
     def publish_camera_info(self, timer=None):
         # Create a publisher for the CameraInfo topic
@@ -191,42 +202,40 @@ class DepthaiCamera():
         return [offset_y, offset_x]
     
     # This function is used to translate between the camera frame and the world location when undertaking aruco detection
-    def target_world_location(self, camera_location):
+    def target_location(self, detection):
         # Add the offset to the initial location to determine the target location
         world_x = self.current_location.x
         world_y = self.current_location.y
 
         rospy.loginfo(f'UAV location x: {world_x}, y: {world_y}!')
 
-        offsets = self.target_offset(camera_location)
+        frame_x = (detection.xmin + detection.xmax) / 2
+        frame_y = (detection.ymin + detection.ymax) / 2
+
+        offsets = self.target_offset([frame_x, frame_y])
 
         world_x += offsets[0]
         world_y += offsets[1]
         
         rospy.loginfo(f'Target location x: {world_x}, y: {world_y}!')
-        # Store the world location in a single array to be returned by the function
-        world_location = [world_x, world_y]
-        return world_location, offsets
-    
-    def process_target_info(self, detection):
-        # Initialise
+        # Localisation msg
         msg_out_localisation = TargetLocalisation()
+        msg_out_localisation.target_label = self.target_label
+        msg_out_localisation.frame_x = world_x - 0.10
+        msg_out_localisation.frame_y = world_y
+        self.target_pub_inf.publish(msg_out_localisation)
+
+
+    def trigger_roi(self, detection):
+        # Initialise
         msg_out_tf = TransformStamped()
         time_found = rospy.Time.now()
-        world_z = self.current_location.z
+        self.target_label = labels[detection.label]
 
         # Calculate location of target
         frame_x = (detection.xmin + detection.xmax) / 2
         frame_y = (detection.ymin + detection.ymax) / 2
-        # target_offsets = self.target_offset([frame_x, frame_y])
-        location, target_offsets = self.target_world_location([frame_x, frame_y])
-
-        # Localisation msg
-        msg_out_localisation.target_label = labels[detection.label]
-        msg_out_localisation.target_id = detection.label
-        msg_out_localisation.frame_x = location[0]
-        msg_out_localisation.frame_y = location[1]
-        self.target_pub_inf.publish(msg_out_localisation)
+        target_offsets = self.target_offset([frame_x, frame_y])
 
         # TF msg
         msg_out_tf.header.stamp = time_found
@@ -235,7 +244,7 @@ class DepthaiCamera():
         
         msg_out_tf.transform.translation.x = - target_offsets[0] + 0.10
         msg_out_tf.transform.translation.y = target_offsets[1] 
-        msg_out_tf.transform.translation.z = world_z - 0.15
+        msg_out_tf.transform.translation.z = -0.15
         msg_out_tf.transform.rotation.x = 0
         msg_out_tf.transform.rotation.z = 0
         msg_out_tf.transform.rotation.y = 0
@@ -301,16 +310,19 @@ class DepthaiCamera():
                         # print("{},{},{},{},{},{},{}".format(detection.label,labels[detection.label],detection.confidence,detection.xmin, detection.ymin, detection.xmax, detection.ymax))
                         # rospy.loginfo(f'Target [{labels[detection.label]}] Found at x-min: {detection.xmin} x-max: {detection.xmax}, y-min: {detection.ymin} y-max: {detection.ymax}')
                         found_classes.append(detection.label)
-
                         if self.current_location.z > 1.8: # start detection at 1.5
                             if detection.confidence > self.target_confidence_threshold:
-                                #rospy.loginfo(f"Confidence:{detection.confidence}")
+                                # self.target_stop.publish(Bool(data=True))
                                 if detection.label == 0 and not self.first_target: # backpack
-                                    self.process_target_info(detection)
+                                    self.trigger_roi(detection)
                                     self.first_target = True
                                 elif detection.label == 1 and not self.second_target: # person
-                                    self.process_target_info(detection)
+                                    self.trigger_roi(detection)
                                     self.second_target = True
+                                if self.start_detection:
+                                    self.target_location(detection)
+                                    self.start_detection = False
+
 
                         #print(dai.ImgDetection.getData(detection))
                     found_classes = np.unique(found_classes)
