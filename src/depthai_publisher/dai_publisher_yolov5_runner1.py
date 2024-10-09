@@ -82,8 +82,8 @@ class DepthaiCamera():
         self.pub_found = rospy.Publisher('/emulated_uav/target_found', Time, queue_size=10)
         
         # Callback to save "current location" such that we can perform and return from a diversion to the correct location
-        self.sub_pose = rospy.Subscriber("mavros/local_position/pose", PoseStamped, self.callback_pose) # Use for flight
-        # self.sub_pose = rospy.Subscriber("uavasr/pose", PoseStamped, self.callback_pose) # Use for emulator
+        # self.sub_pose = rospy.Subscriber("mavros/local_position/pose", PoseStamped, self.callback_pose) # Use for flight
+        self.sub_pose = rospy.Subscriber("uavasr/pose", PoseStamped, self.callback_pose) # Use for emulator
 
         # Pose
         self.current_location = Point()
@@ -173,7 +173,7 @@ class DepthaiCamera():
 
     def target_offset(self, camera_location): ### NEED TO CLEAN THIS FUNCTION
         # The initial location of the UAV 
-        world_z = self.current_location.z
+        world_z = self.current_location.z - 0.15
 
         # Normalised position of the target within the camera frame [-1, 1] in both x- and y-directions
         # Positive values correspond to positive values in the world frame
@@ -181,26 +181,14 @@ class DepthaiCamera():
         camera_offset_x = (0.5 - camera_location[0]) / 0.5
         camera_offset_y = (0.5 - camera_location[1]) / 0.5
 
-        # rospy.loginfo(f'offset_x: {camera_offset_x}, offset_y: {camera_offset_y}!')
+        rospy.loginfo(f'Camera offset x: {camera_offset_x}, y: {camera_offset_y}!')
 
         # The offset from the UAV of the target, based on the location within the camera frame
         offset_x = camera_offset_x * world_z * tan(self.camera_FOV_x / 2) 
         offset_y = camera_offset_y * world_z * tan(self.camera_FOV_y / 2) 
 
-        # rospy.loginfo(f'offset_x: {offset_x}, offset_y: {offset_y}!')
-
-        # if offset_x > 0 and offset_y < 0:
-        #     return [offset_x, -offset_y]
-        # elif offset_x < 0 and offset_y < 0:
-        #     return [-offset_x, offset_y]
-        # elif offset_x < 0 and offset_y > 0:
-        #     return [offset_x, -offset_y]
-        # elif offset_x > 0 and offset_y > 0:
-        #     return [-offset_x, offset_y]
-        if (offset_x > 0 and offset_y < 0) or (offset_x < 0 and offset_y > 0):
-            return [offset_x, -offset_y]
-        else:
-            return [-offset_x, offset_y]
+        rospy.loginfo(f'Offset x: {offset_x}, y: {offset_y}!')
+        return [offset_y, offset_x]
     
     # This function is used to translate between the camera frame and the world location when undertaking aruco detection
     def target_world_location(self, camera_location):
@@ -208,11 +196,14 @@ class DepthaiCamera():
         world_x = self.current_location.x
         world_y = self.current_location.y
 
+        rospy.loginfo(f'UAV location x: {world_x}, y: {world_y}!')
+
         offsets = self.target_offset(camera_location)
 
         world_x += offsets[0]
         world_y += offsets[1]
-
+        
+        rospy.loginfo(f'Target location x: {world_x}, y: {world_y}!')
         # Store the world location in a single array to be returned by the function
         world_location = [world_x, world_y]
         return world_location, offsets
@@ -233,6 +224,8 @@ class DepthaiCamera():
         # Localisation msg
         msg_out_localisation.target_label = labels[detection.label]
         msg_out_localisation.target_id = detection.label
+        msg_out_localisation.frame_x = location[0]
+        msg_out_localisation.frame_y = location[1]
         self.target_pub_inf.publish(msg_out_localisation)
 
         # TF msg
@@ -240,7 +233,7 @@ class DepthaiCamera():
         msg_out_tf.header.frame_id = "camera"
         msg_out_tf.child_frame_id = "target"
         
-        msg_out_tf.transform.translation.x = target_offsets[0] + 0.10
+        msg_out_tf.transform.translation.x = - target_offsets[0] + 0.10
         msg_out_tf.transform.translation.y = target_offsets[1] 
         msg_out_tf.transform.translation.z = world_z - 0.15
         msg_out_tf.transform.rotation.x = 0
@@ -309,7 +302,7 @@ class DepthaiCamera():
                         # rospy.loginfo(f'Target [{labels[detection.label]}] Found at x-min: {detection.xmin} x-max: {detection.xmax}, y-min: {detection.ymin} y-max: {detection.ymax}')
                         found_classes.append(detection.label)
 
-                        if self.current_location.z > 2: # start detection at 1.5
+                        if self.current_location.z > 1.8: # start detection at 1.5
                             if detection.confidence > self.target_confidence_threshold:
                                 #rospy.loginfo(f"Confidence:{detection.confidence}")
                                 if detection.label == 0 and not self.first_target: # backpack
