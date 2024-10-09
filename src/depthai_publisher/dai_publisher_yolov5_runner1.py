@@ -131,8 +131,6 @@ class DepthaiCamera():
     def callback_stop(self, msg_in):
         if msg_in.data:
             self.start_detection = True
-        else:
-            self.start_detection = False
 
     def publish_camera_info(self, timer=None):
         # Create a publisher for the CameraInfo topic
