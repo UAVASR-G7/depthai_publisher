@@ -46,13 +46,21 @@ class DepthaiCamera():
         camera_info_msg.width = self.res[1]   # Set the width of the camera image
 
         # Set the camera intrinsic matrix (fx, fy, cx, cy)
-        camera_info_msg.K = [615.381, 0.0, 320.0, 0.0, 615.381, 240.0, 0.0, 0.0, 1.0]
+        # camera_info_msg.K = [615.381, 0.0, 320.0, 0.0, 615.381, 240.0, 0.0, 0.0, 1.0] # old
+        camera_info_msg.K = [619.994, 0.0, 217.039, 0.0, 620.141, 199.928, 0.0, 0.0, 1.0]
+
         # Set the distortion parameters (k1, k2, p1, p2, k3)
-        camera_info_msg.D = [-0.10818, 0.12793, 0.00000, 0.00000, -0.04204]
+        # camera_info_msg.D = [-0.10818, 0.12793, 0.00000, 0.00000, -0.04204] # old
+        camera_info_msg.D = [0.134107, -0.71825, -0.00575186, 0.00481137, 0.0]
+
         # Set the rectification matrix (identity matrix)
+        # camera_info_msg.R = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0] # old
         camera_info_msg.R = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0]
+
         # Set the projection matrix (P)
-        camera_info_msg.P = [615.381, 0.0, 320.0, 0.0, 0.0, 615.381, 240.0, 0.0, 0.0, 0.0, 1.0, 0.0]
+        # camera_info_msg.P = [615.381, 0.0, 320.0, 0.0, 0.0, 615.381, 240.0, 0.0, 0.0, 0.0, 1.0, 0.0] # old
+        camera_info_msg.P = [622.481, 0.0, 217.663, 0.0, 0.0, 622.491, 198.122, 0.0, 0.0, 0.0, 1.0, 0.0]
+
         # Set the distortion model
         camera_info_msg.distortion_model = "plumb_bob"
         # Set the timestamp
@@ -93,7 +101,7 @@ class DepthaiCamera():
         msg_out = CompressedImage()
         msg_out.header.stamp = rospy.Time.now()
         msg_out.format = "jpeg"
-        msg_out.header.frame_id = "camera"
+        msg_out.header.frame_id = "home"
         msg_out.data = np.array(cv2.imencode('.jpg', frame)[1]).tostring()
         self.pub_image.publish(msg_out)
         # Publish image raw
