@@ -14,7 +14,7 @@ import threading
 
 
 class ArucoDetector():
-    aruco_dict = cv2.aruco.Dictionary_get(cv2.aruco.DICT_4X4_100)
+    aruco_dict = cv2.aruco.Dictionary_get(cv2.aruco.DICT_5X5_100)
     aruco_params = cv2.aruco.DetectorParameters_create()
 
     frame_sub_topic = '/depthai_node/image/compressed'
@@ -24,8 +24,8 @@ class ArucoDetector():
             '/processed_aruco/image/compressed', CompressedImage, queue_size=10)
         
         # Callback to save "current location" such that we can perform and return from a diversion to the correct location
-        #self.sub_pose = rospy.Subscriber("mavros/local_position/pose", PoseStamped, self.callback_pose) # For flight
-        self.sub_pose = rospy.Subscriber("uavasr/pose", PoseStamped, self.callback_pose) # Use for emulator
+        self.sub_pose = rospy.Subscriber("mavros/local_position/pose", PoseStamped, self.callback_pose) # For flight
+        # self.sub_pose = rospy.Subscriber("uavasr/pose", PoseStamped, self.callback_pose) # Use for emulator
         
         self.aruco_pub_inf = rospy.Publisher('/processed_aruco/localisation', ArucoLocalisation, queue_size=10)
         self.br = CvBridge()
@@ -90,18 +90,12 @@ class ArucoDetector():
         offset_x = camera_offset_x * world_z * tan(self.camera_FOV_x / 2) 
         offset_y = camera_offset_y * world_z * tan(self.camera_FOV_y / 2) 
 
-        # To make sure that it follows the same axis orientation as the uav
-        if (offset_x > 0 and offset_y < 0) or (offset_x < 0 and offset_y > 0):
-            offset_y = -offset_y
-        else:
-            offset_x = -offset_x
-
         # Add the offset to the initial location to determine the target location
-        world_x += offset_x 
-        world_y += offset_y
+        world_x += offset_y 
+        world_y += offset_x
 
         # Store the world location in a single array to be returned by the function
-        world_location = [world_x, world_y, world_z]
+        world_location = [world_x - 0.10, world_y, world_z]
         return world_location, uav_location
 
     def find_aruco(self, frame):
