@@ -325,7 +325,7 @@ class DepthaiCamera():
                             if detection.confidence > self.target_confidence_threshold:
                                 #rospy.loginfo(f"Confidence:{detection.confidence}")
                                 self.pub_detection_status.publish(Bool(data=True)) # tell UAV halt 
-                                if self.flight_halt_flag == False: # UAV confirms halt
+                                if self.flight_halt_flag == False: # UAV confirms halt (for 10sec)
                                     if detection.label == 0 and not self.first_target: # backpack
                                         self.process_target_info(detection)
                                         self.first_target = True
