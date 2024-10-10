@@ -22,7 +22,7 @@ from sensor_msgs.msg import CompressedImage, Image, CameraInfo
 from cv_bridge import CvBridge, CvBridgeError
 from spar_msgs.msg import TargetLocalisation
 from geometry_msgs.msg import Point, PoseStamped, TransformStamped
-from std_msgs.msg import Time
+from std_msgs.msg import Time, Bool
 from math import *
 
 ############################### ############################### Parameters ###############################
@@ -84,6 +84,10 @@ class DepthaiCamera():
         # Callback to save "current location" such that we can perform and return from a diversion to the correct location
         self.sub_pose = rospy.Subscriber("mavros/local_position/pose", PoseStamped, self.callback_pose) # Use for flight
         # self.sub_pose = rospy.Subscriber("uavasr/pose", PoseStamped, self.callback_pose) # Use for emulator
+        # Target Detection Subscriber (to stop flight motion for detection purposes)
+        self.sub_detection_flag  = rospy.Subscriber('target_detection/stop', Bool, self.callback_halt)
+        # Target Detection publisher (to initiate ITA detection)
+        self.pub_detection_status = rospy.Publisher('/target_detection/stop', Bool, queue_size=10)
 
         # Pose
         self.current_location = Point()
@@ -94,6 +98,9 @@ class DepthaiCamera():
         # Variables for the target
         self.first_target = False
         self.second_target = False
+
+        # Bool halt flag
+        self.flight_halt_flag = None
 
         # Camera Variables
         self.camera_FOV_x = 54 * (pi / 180) # [rad]
@@ -122,6 +129,11 @@ class DepthaiCamera():
         #rospy.loginfo("Pose Callback recieved/Triggered")
         # Store the current position at all times so it can be accessed later
         self.current_location = msg_in.pose.position
+
+    # This function sets the global varable, which is references within the check_waypoint_status() callback 
+    def callback_halt(self,msg_in):
+        if msg_in.data == False:
+            self.flight_halt_flag = msg_in.data
 
     def publish_camera_info(self, timer=None):
         # Create a publisher for the CameraInfo topic
@@ -312,12 +324,15 @@ class DepthaiCamera():
                         if self.current_location.z > 2: # start detection at 1.5
                             if detection.confidence > self.target_confidence_threshold:
                                 #rospy.loginfo(f"Confidence:{detection.confidence}")
-                                if detection.label == 0 and not self.first_target: # backpack
-                                    self.process_target_info(detection)
-                                    self.first_target = True
-                                elif detection.label == 1 and not self.second_target: # person
-                                    self.process_target_info(detection)
-                                    self.second_target = True
+                                self.pub_detection_status.publish(Bool(data=True)) # tell UAV halt 
+                                if self.flight_halt_flag == False: # UAV confirms halt
+                                    if detection.label == 0 and not self.first_target: # backpack
+                                        self.process_target_info(detection)
+                                        self.first_target = True
+                                    elif detection.label == 1 and not self.second_target: # person
+                                        self.process_target_info(detection)
+                                        self.second_target = True
+                                self.flight_halt_flag = None # reset flag for next roi
 
                         #print(dai.ImgDetection.getData(detection))
                     found_classes = np.unique(found_classes)
