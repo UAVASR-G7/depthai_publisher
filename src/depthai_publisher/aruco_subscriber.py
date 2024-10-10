@@ -24,8 +24,8 @@ class ArucoDetector():
             '/processed_aruco/image/compressed', CompressedImage, queue_size=10)
         
         # Callback to save "current location" such that we can perform and return from a diversion to the correct location
-        # self.sub_pose = rospy.Subscriber("mavros/local_position/pose", PoseStamped, self.callback_pose) # For flight
-        self.sub_pose = rospy.Subscriber("uavasr/pose", PoseStamped, self.callback_pose) # Use for emulator
+        self.sub_pose = rospy.Subscriber("mavros/local_position/pose", PoseStamped, self.callback_pose) # For flight
+        # self.sub_pose = rospy.Subscriber("uavasr/pose", PoseStamped, self.callback_pose) # Use for emulator
         #
         self.sub_aruco_location = rospy.Subscriber('/processed_aruco/location', Bool, self.callback_stop)
 
@@ -47,7 +47,7 @@ class ArucoDetector():
         # self.pub_target_vocal = rospy.Publisher('payload/target', TargetLocalisation, queue_size = 10)
 
         # Aruco Variables
-        self.desired_aruco_id = 6 # Changed to the aruco marker to land
+        self.desired_aruco_id = 20 # Changed to the aruco marker to land
         self.previous_aruco_id = -1
         self.FoundAruco = False # If aruco is not found, land at origin (aruco landing contigency)
         self.ArucoLand = False
