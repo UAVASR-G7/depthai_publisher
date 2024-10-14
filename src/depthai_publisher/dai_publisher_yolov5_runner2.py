@@ -89,7 +89,7 @@ class DepthaiCamera():
         self.current_location = Point()
 
         # Target confidence
-        self.target_confidence_threshold = 0.9
+        self.target_confidence_threshold = 0.85
         
         # Variables for the target
         self.first_target = False
