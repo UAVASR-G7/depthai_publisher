@@ -173,7 +173,7 @@ class DepthaiCamera():
 
     def target_offset(self, camera_location): ### NEED TO CLEAN THIS FUNCTION
         # The initial location of the UAV 
-        world_z = self.current_location.z
+        world_z = self.current_location.z - 0.15
 
         # Normalised position of the target within the camera frame [-1, 1] in both x- and y-directions
         # Positive values correspond to positive values in the world frame
@@ -181,15 +181,13 @@ class DepthaiCamera():
         camera_offset_x = (0.5 - camera_location[0]) / 0.5
         camera_offset_y = (0.5 - camera_location[1]) / 0.5
 
-        # rospy.loginfo(f'offset_x: {camera_offset_x}, offset_y: {camera_offset_y}!')
+        rospy.loginfo(f'Camera x: {camera_offset_x}, y: {camera_offset_y}!')
 
         # The offset from the UAV of the target, based on the location within the camera frame
         offset_x = camera_offset_x * world_z * tan(self.camera_FOV_x / 2) 
         offset_y = camera_offset_y * world_z * tan(self.camera_FOV_y / 2) 
 
-        # rospy.loginfo(f'offset_x: {offset_x}, offset_y: {offset_y}!')
-
-        return [offset_x, offset_y]
+        return [offset_y, offset_x]
     
     # This function is used to translate between the camera frame and the world location when undertaking aruco detection
     def target_world_location(self, camera_location):
@@ -197,14 +195,14 @@ class DepthaiCamera():
         world_x = self.current_location.x
         world_y = self.current_location.y
 
-        offsets = self.target_offset(camera_location)
+        [offset_x, offset_y] = self.target_offset(camera_location)
 
-        world_x += offsets[1]
-        world_y += offsets[0]
+        world_x += offset_x
+        world_y += offset_y
 
         # Store the world location in a single array to be returned by the function
         world_location = [world_x - 0.10, world_y]
-        return world_location, offsets
+        return world_location, [offset_x - 0.10, offset_y]
     
     def process_target_info(self, detection):
         # Initialise
@@ -218,6 +216,9 @@ class DepthaiCamera():
         frame_y = (detection.ymin + detection.ymax) / 2
         # target_offsets = self.target_offset([frame_x, frame_y])
         location, target_offsets = self.target_world_location([frame_x, frame_y])
+        rospy.loginfo(f'UAV Offset from target x: {target_offsets[0]}, y: {target_offsets[1]}!')
+        rospy.loginfo(f'Target location x: {location[0]}, y: {location[1]}!')
+
 
         # Localisation msg
         msg_out_localisation.target_label = labels[detection.label]
