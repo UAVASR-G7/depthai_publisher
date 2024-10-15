@@ -24,8 +24,8 @@ class ArucoDetector():
             '/processed_aruco/image/compressed', CompressedImage, queue_size=10)
         
         # Callback to save "current location" such that we can perform and return from a diversion to the correct location
-        self.sub_pose = rospy.Subscriber("mavros/local_position/pose", PoseStamped, self.callback_pose) # For flight
-        # self.sub_pose = rospy.Subscriber("uavasr/pose", PoseStamped, self.callback_pose) # Use for emulator
+        # self.sub_pose = rospy.Subscriber("mavros/local_position/pose", PoseStamped, self.callback_pose) # For flight
+        self.sub_pose = rospy.Subscriber("uavasr/pose", PoseStamped, self.callback_pose) # Use for emulator
         #
         self.sub_aruco_location = rospy.Subscriber('/processed_aruco/location', Bool, self.callback_stop)
 
@@ -69,17 +69,29 @@ class ArucoDetector():
             self.ArucoLand = False
 
     def img_callback(self, msg_in):
-        if msg_in.header.stamp > self.last_msg_time:
-            try:
-                frame = self.br.compressed_imgmsg_to_cv2(msg_in)
-            except CvBridgeError as e:
-                rospy.logerr(e)
+        # if msg_in.header.stamp > self.last_msg_time:
+        #     try:
+        #         frame = self.br.compressed_imgmsg_to_cv2(msg_in)
+        #     except CvBridgeError as e:
+        #         rospy.logerr(e)
 
-            aruco = self.find_aruco(frame)
-            self.publish_to_ros(aruco)
-            # self.publish_marker(aruco)
+        #     aruco = self.find_aruco(frame)
+        #     self.publish_to_ros(aruco)
 
-            self.time_finished_processing = rospy.Time.now()
+        #     self.time_finished_processing = rospy.Time.now()
+
+        with self.lock:
+            if msg_in.header.stamp <= self.last_msg_time:
+                return
+            self.last_msg_time = msg_in.header.stamp
+
+        try:
+            frame = self.br.compressed_imgmsg_to_cv2(msg_in)
+        except CvBridgeError as e:
+            rospy.logerr(e)
+
+        aruco = self.find_aruco(frame)
+        self.publish_to_ros(aruco)     
 	
     # This function is used to translate between the camera frame and the world location when undertaking aruco detection
     def aruco_frame_translation(self, camera_location):
